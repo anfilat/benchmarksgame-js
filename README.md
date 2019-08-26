@@ -10,7 +10,7 @@ node binarytrees.js 21
 node fannkuchredux.js 12
 node fasta.js 25000000 > out.txt
 node knucleotide.js < input25000000.txt > out.txt
-node mandelbrot.js 16000
+node mandelbrot.js 16000 > out.txt
 node nbody.js 50000000
 node pidigits.js 10000
 node regexredux.js < input5000000.txt

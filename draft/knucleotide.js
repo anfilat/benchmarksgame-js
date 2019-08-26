@@ -34,14 +34,16 @@ function keyToString (value, length) {
 	return str.join('').toUpperCase();
 }
 
+let pow;
+
 function frequency (seq, length) {
 	const freq = new Map();
 	const n = seq.length - length + 1;
 	const maskLength = length * 2 - 2;
-	const pow = Math.pow(2, maskLength);
 	let key = sliceToInt(seq, 0, length);
 
-	for (let i = length; i < n; ++i) {
+	pow = Math.pow(2, maskLength);
+	for (let i = 1; i < n; ++i) {
 		const cur = freq.get(key);
 		if (cur === undefined) {
 			freq.set(key, new RefNum(1));
