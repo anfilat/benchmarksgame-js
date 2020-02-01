@@ -5,13 +5,12 @@
    multi thread by Andrey Filatkin
 */
 
-const { Worker, isMainThread, parentPort } = require('worker_threads');
-const os = require('os');
+const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
 if (isMainThread) {
     mainThread();
 } else {
-    workerThread();
+    workerThread(workerData);
 }
 
 async function mainThread() {
@@ -24,84 +23,47 @@ async function mainThread() {
     const longLivedTree = bottomUpTree(maxDepth);
 
     const tasks = [];
-    let index = 0;
     for (let depth = 4; depth <= maxDepth; depth += 2) {
         const iterations = 1 << maxDepth - depth + 4;
-        tasks.push({index, iterations, depth});
-        index++;
+        tasks.push({iterations, depth});
     }
 
-    const results = [];
-    await threadReduce(tasks, null, ({index, result}) => {
-        results[index] = result;
-    });
-    for (let i = 0; i < results.length; i++) {
-        console.log(results[i]);
+    const results = await runTasks(tasks);
+    for (const result of results) {
+        console.log(result);
     }
 
     console.log(`long lived tree of depth ${maxDepth}\t check: ${itemCheck(longLivedTree)}`);
 }
 
-function workerThread() {
-    parentPort.on('message', message => {
-        const name = message.name;
-
-        if (name === 'work') {
-            const data = message.data;
-            parentPort.postMessage({
-                name: 'result',
-                data: {
-                    index: data.index,
-                    result: work(data.iterations, data.depth)
-                },
-            });
-        } else if (name === 'exit') {
-            process.exit();
-        }
+function workerThread({iterations, depth}) {
+    parentPort.postMessage({
+        result: work(iterations, depth)
     });
-    parentPort.postMessage({name: 'ready'});
 }
 
-function threadReduce(tasks, workerData, reducer) {
+function runTasks(tasks) {
     return new Promise(resolve => {
-        const size = os.cpus().length;
-        const workers = new Set();
-        let ind = 0;
+        const results = [];
+        let tasksSize = tasks.length;
 
-        for (let i = 0; i < size; i++) {
-            const worker = new Worker(__filename, {workerData});
+        for (let i = 0; i < tasks.length; i++) {
+            const worker = new Worker(__filename, {workerData: tasks[i]});
 
             worker.on('message', message => {
-                const name = message.name;
-
-                if (name === 'result') {
-                    reducer(message.data);
-                }
-                if (name === 'ready' || name === 'result') {
-                    if (ind < tasks.length) {
-                        const data = tasks[ind];
-                        ind++;
-                        worker.postMessage({name: 'work', data});
-                    } else {
-                        worker.postMessage({name: 'exit'});
-                    }
+                results[i] = message.result;
+                tasksSize--;
+                if (tasksSize === 0) {
+                    resolve(results);
                 }
             });
-            worker.on('exit', () => {
-                workers.delete(worker);
-                if (workers.size === 0) {
-                    resolve();
-                }
-            });
-
-            workers.add(worker);
         }
     });
 }
 
 function work(iterations, depth) {
     let check = 0;
-    for (let i = 1; i <= iterations; i++) {
+    for (let i = 0; i < iterations; i++) {
         check += itemCheck(bottomUpTree(depth));
     }
     return `${iterations}\t trees of depth ${depth}\t check: ${check}`;
@@ -120,6 +82,6 @@ function itemCheck(node) {
 
 function bottomUpTree(depth) {
     return depth > 0
-        ? new TreeNode(bottomUpTree(depth - 1),  bottomUpTree(depth - 1))
+        ? new TreeNode(bottomUpTree(depth - 1), bottomUpTree(depth - 1))
         : new TreeNode(null, null);
 }
