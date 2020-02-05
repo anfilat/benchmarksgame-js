@@ -85,7 +85,7 @@ async function mainThread() {
         }
 
         const len = to - from;
-        if (dataBufPos + len > dataBuf.length) {
+        while (dataBufPos + len > dataBuf.length) {
             const newArr = new SharedArrayBuffer(dataBuf.length * 2);
             const newBuf = Buffer.from(newArr);
             dataBuf.copy(newBuf, 0, 0, dataBufPos);
