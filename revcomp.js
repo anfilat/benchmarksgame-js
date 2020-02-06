@@ -30,7 +30,8 @@ if (isMainThread) {
 }
 
 async function mainThread() {
-    const titleBuf = Buffer.allocUnsafe(lineLen);
+    let worker = null;
+    let titleBuf = Buffer.allocUnsafe(lineLen);
     let titleBufPos = 0;
     let titleBufPartial = false;
 
@@ -43,6 +44,7 @@ async function mainThread() {
     }
 
     await onSection();
+    await worker;
 
     async function onChunk(chunk) {
         const len = chunk.length;
@@ -83,7 +85,7 @@ async function mainThread() {
         }
 
         const len = to - from;
-        if (dataBufPos + len > dataBuf.length) {
+        while (dataBufPos + len > dataBuf.length) {
             const newArr = new SharedArrayBuffer(dataBuf.length * 2);
             const newBuf = Buffer.from(newArr);
             dataBuf.copy(newBuf, 0, 0, dataBufPos);
@@ -99,44 +101,45 @@ async function mainThread() {
             return;
         }
 
-        const outputArray = new SharedArrayBuffer(dataBufPos);
+        await worker;
 
-        await processData(outputArray);
+        worker = processData(titleBuf, titleBufPos, dataBuf, dataBufPos);
 
-        process.stdout.write(titleBuf.subarray(0, titleBufPos));
-        process.stdout.write(new Uint8Array(outputArray));
+        titleBuf = Buffer.allocUnsafe(lineLen);
         titleBufPos = 0;
+        titleBufPartial = false;
+
+        dataArray = new SharedArrayBuffer(dataBuf.length);
+        dataBuf = Buffer.from(dataArray);
         dataBufPos = 0;
     }
 
-    function processData(outputArray) {
+    function processData(titleBuf, titleBufLen, dataBuf, dataBufLen) {
         return new Promise(resolve => {
-            const cpus = os.cpus().length;
-            const remainder = dataBufPos % (cpus * fullLineLen);
-            const chunk = (dataBufPos - remainder) / cpus;
-            const isShift = dataBufPos % fullLineLen !== 0;
-            let from = dataBufPos;
-            let to = 0;
+            const threads = Math.max(1, os.cpus().length - 2);
+            const lines = Math.ceil(dataBufLen / fullLineLen);
+            const dataLen = dataBufLen - lines;
+            const chunkLen = Math.floor(dataLen / (2 * threads));
 
             let wait = 0;
-            for (let i = 0; i < cpus; i++) {
-                let inputSize = chunk;
-                let outputSize = chunk;
-                if (isShift) {
-                    if (i === 0) {
-                        inputSize += 1;
-                    }
-                    if (i === cpus - 1) {
-                        inputSize -= 1;
-                    }
-                }
-                if (i === cpus - 1) {
-                    inputSize += remainder;
-                    outputSize += remainder;
-                }
+            let bottomStart = 0;
+            let bottomRealStart = 0;
+            let topStart = dataLen;
+            let topRealStart = topStart + Math.floor(topStart / lineLen);
+            for (let i = 0; i < threads; i++) {
+                const bottomFinish = i < threads - 1 ? bottomStart + chunkLen : dataLen >> 1;
+                const topFinish = i < threads - 1 ? topStart - chunkLen : dataLen >> 1;
+                const bottomRealFinish = bottomFinish + Math.floor(bottomFinish / lineLen);
+                const topRealFinish = topFinish + Math.floor(topFinish / lineLen);
 
                 const worker = new Worker(__filename);
-                worker.postMessage({data: {dataArray, outputArray, from, to, inputSize, outputSize}});
+                worker.postMessage({data: {
+                    dataArray: dataBuf.buffer,
+                    topFrom: topRealFinish,
+                    bottomFrom: bottomRealStart,
+                    topSize: topRealStart - topRealFinish,
+                    bottomSize: bottomRealFinish - bottomRealStart
+                }});
                 worker.on('exit', () => {
                     wait--;
                     if (wait === 0) {
@@ -145,10 +148,16 @@ async function mainThread() {
                 });
                 wait++;
 
-                from -= inputSize;
-                to += outputSize;
+                bottomStart = bottomFinish;
+                bottomRealStart = bottomRealFinish;
+                topStart = topFinish;
+                topRealStart = topRealFinish;
             }
-        });
+        })
+            .then(() => {
+                process.stdout.write(titleBuf.subarray(0, titleBufLen));
+                process.stdout.write(dataBuf.subarray(0, dataBufLen));
+            });
     }
 }
 
@@ -158,25 +167,23 @@ function workerThread() {
         process.exit();
     });
 
-    function writeBuf({dataArray, outputArray, from, to, inputSize, outputSize}) {
-        const input = new Uint8Array(dataArray, from - inputSize, inputSize);
-        const output = new Uint8Array(outputArray, to, outputSize);
+    function writeBuf({dataArray, topFrom, bottomFrom, topSize, bottomSize}) {
+        const input = new Uint8Array(dataArray, topFrom, topSize);
+        const output = new Uint8Array(dataArray, bottomFrom, bottomSize);
 
-        let i = inputSize - 1;
+        let i = topSize - 1;
         let o = 0;
-        let n = 0;
         while (i >= 0) {
-            let char = input[i--];
-            if (char === endLine) {
-                char = input[i--];
+            let char1 = input[i--];
+            if (char1 === endLine) {
+                char1 = input[i--];
             }
-            output[o++] = smap[char];
-            n++;
-            if (n === 60) {
-                output[o++] = endLine;
-                n = 0;
+            let char2 = output[o++];
+            if (char2 === endLine) {
+                char2 = output[o++];
             }
+            output[o - 1] = smap[char1];
+            input[i + 1] = smap[char2];
         }
-        output[outputSize - 1] = endLine;
     }
 }
