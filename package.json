@@ -1,0 +1,24 @@
+{
+  "name": "benchmarksgame-js",
+  "version": "1.0.0",
+  "main": "binarytrees.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anfilat/benchmarksgame-js.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/anfilat/benchmarksgame-js/issues"
+  },
+  "homepage": "https://github.com/anfilat/benchmarksgame-js#readme",
+  "dependencies": {
+    "ffi-napi": "^2.4.6",
+    "ref-napi": "^1.4.3",
+    "ref-struct-di": "^1.1.0"
+  }
+}
