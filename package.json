@@ -17,8 +17,6 @@
   },
   "homepage": "https://github.com/anfilat/benchmarksgame-js#readme",
   "dependencies": {
-    "ffi-napi": "^2.4.6",
-    "ref-napi": "^1.4.3",
-    "ref-struct-di": "^1.1.0"
+    "mpzjs": "^0.5.0"
   }
 }
