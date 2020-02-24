@@ -22,8 +22,8 @@ function fillFact(n) {
 
 function fannkuch(n) {
     return function ({idxMin, idxMax}) {
-        const p = Array(n);
-        const pp = Array(n);
+        const p = [];
+        const pp = [];
         const count = Array(n);
 
         // first permutation
