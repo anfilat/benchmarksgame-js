@@ -17,6 +17,6 @@
   },
   "homepage": "https://github.com/anfilat/benchmarksgame-js#readme",
   "dependencies": {
-    "mpzjs": "^0.6.0"
+    "mpzjs": "^0.7.0"
   }
 }
